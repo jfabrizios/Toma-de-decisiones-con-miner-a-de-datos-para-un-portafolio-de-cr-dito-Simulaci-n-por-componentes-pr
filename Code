@@ -1,0 +1,819 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Sat Jan 27 20:00:54 2018
+
+@author: Juan Fabrizio Sanchez
+"""
+
+#Creación de un flujo para una simulación por componentes pricipales 
+
+#Pasos a seguir 
+### Analisis de la base 
+### Transformacion
+### Componentes principales
+### Generación de espacio
+### Contaste de pruebas
+
+################################################
+########          LIBRERIAS         ############
+################################################
+
+import numpy as np
+from sklearn.decomposition import PCA
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import scale
+
+import scipy
+from scipy import stats
+
+import seaborn as sns
+
+from pandas.tools.plotting import scatter_matrix
+
+from scipy.stats import ks_2samp
+
+from string import ascii_letters
+
+from pandas import Series, DataFrame
+from pylab import rcParams
+from sklearn import preprocessing
+from sklearn.linear_model import LogisticRegression
+from sklearn.cross_validation import train_test_split
+from sklearn import metrics 
+from sklearn.metrics import mean_squared_error, r2_score
+
+from sklearn.metrics import classification_report
+import statsmodels.api as sm
+
+################################################
+########     ANALISIS DE LA MUESTRA  ###########
+################################################
+
+### Introducimos la base
+data=pd.read_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/LC_2014.csv',header=0)
+
+data
+### Información tecnica de la base
+data.info()
+
+
+### Información purpose
+
+ax=data.groupby(["purpose"]).size().plot(kind='bar',alpha=.70,)
+totals = []
+for i in ax.patches:
+    totals.append(i.get_height())
+total = sum(totals)
+for i in ax.patches:
+    ax.text(i.get_x()+.12, i.get_height()-3, \
+            str(round((i.get_height()/total)*100, 1))+'%', fontsize=12,
+                color='black')
+
+
+data_tdc = data[(data.purpose == "credit_card") ]
+
+
+### Información loan_status
+
+ax=data_tdc.groupby(["loan_status"]).size().plot(kind='bar',alpha=.70,)
+totals = []
+for i in ax.patches:
+    totals.append(i.get_height())
+total = sum(totals)
+for i in ax.patches:
+    ax.text(i.get_x()+.12, i.get_height()-3, \
+            str(round((i.get_height()/total)*100, 1))+'%', fontsize=12,
+                color='black')
+
+
+### Filtrado de los P = 1 y 0
+
+data_tdc1 = data_tdc[(data_tdc.loan_status != "Default") & 
+                 (data_tdc.loan_status != "Fully Paid")  & 
+                 (data_tdc.loan_status != "Charged Off") & 
+                 (data_tdc.loan_status != "In Grace Period")]
+
+data_tdc1['target']=np.where(data_tdc1['loan_status']=="Current", 0, 1)
+data_tdc1
+
+ax=data_tdc1.groupby(["delinq_2yrs"]).size().plot(kind='bar',alpha=.70,)
+totals=[]
+for i in ax.patches:
+    totals.append(i.get_height())
+total = sum(totals)
+for i in ax.patches:
+    ax.text(i.get_x()+.12, i.get_height()-3, \
+            str(round((i.get_height()/total)*100, 0))+'%', fontsize=12,
+                color='black')
+
+
+data_tdc2 = data_tdc1[(data_tdc.delinq_2yrs == 0)]
+
+### Información incumplimient
+
+ax=data_tdc2.groupby(["loan_status"]).size().plot(kind='bar', 
+                                  color="coral", fontsize=13);
+totals = []
+for i in ax.patches:
+    totals.append(i.get_height())
+total = sum(totals)
+for i in ax.patches:
+    ax.text(i.get_x()+.12, i.get_height()-3, \
+            str(round((i.get_height()/total)*100, 2))+'%', fontsize=12,
+                color='black')
+
+### Diseño de datos
+
+data_tdc2.info()
+
+### Eliminación de cadenas
+
+df = data_tdc2[data_tdc2.T[data_tdc2.dtypes!=np.object].index]
+
+df.info()
+
+### Quitamos variables sin valores
+
+des_df=df.describe()
+
+des_df.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/out.csv')
+
+dg=df.drop(['member_id', 'url', 'annual_inc_joint', 'dti_joint', 'verification_status_joint', 'open_acc_6m', 'open_act_il', 'open_il_12m', 'open_il_24m', 'mths_since_rcnt_il', 'total_bal_il', 'il_util', 'open_rv_12m', 'open_rv_24m', 'max_bal_bc', 'all_util', 'inq_fi', 'total_cu_tl', 'inq_last_12m', 'revol_bal_joint', 'sec_app_earliest_cr_line', 'sec_app_inq_last_6mths', 'sec_app_mort_acc', 'sec_app_open_acc', 'sec_app_revol_util', 'sec_app_open_act_il', 'sec_app_num_rev_accts', 'sec_app_chargeoff_within_12_mths', 'sec_app_collections_12_mths_ex_med', 'sec_app_mths_since_last_major_derog', 'deferral_term', 'hardship_amount', 'hardship_length', 'hardship_dpd', 'orig_projected_additional_accrued_interest', 'hardship_payoff_balance_amount', 'hardship_last_payment_amount', 'settlement_amount', 'settlement_percentage', 'settlement_term', 'delinq_2yrs', 'recoveries', 'collection_recovery_fee', 'policy_code', 'acc_now_delinq', 'delinq_amnt', 'num_tl_120dpd_2m', 'num_tl_30dpd', 'num_tl_90g_dpd_24m'], axis=1, inplace=True)
+
+df.info()
+
+#df.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/limpia.csv')
+
+### Utilizaremos Corr para ver las variables correlacionadas
+
+sns.set(style="white")
+
+# Compute the correlation matrix
+corr = df.corr()
+
+#corr.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/corr.csv')
+
+# Generate a mask for the upper triangle
+mask = np.zeros_like(corr, dtype=np.bool)
+mask[np.triu_indices_from(mask)] = True
+
+# Set up the matplotlib figure
+f, ax = plt.subplots(figsize=(11, 9))
+
+# Generate a custom diverging colormap
+cmap = sns.diverging_palette(220, 10, as_cmap=True)
+
+# Draw the heatmap with the mask and correct aspect ratio
+sns.heatmap(corr, mask=mask, cmap=cmap, vmax=.9, center=0,
+            square=True, linewidths=.5, cbar_kws={"shrink": .5})
+
+#Variables con alta correlación
+
+#df = data_tdc2[data_tdc2.T[data_tdc2.dtypes!=np.object].index]
+#dg=df.drop(['member_id', 'url', 'annual_inc_joint', 'dti_joint', 'verification_status_joint', 'open_acc_6m', 'open_act_il', 'open_il_12m', 'open_il_24m', 'mths_since_rcnt_il', 'total_bal_il', 'il_util', 'open_rv_12m', 'open_rv_24m', 'max_bal_bc', 'all_util', 'inq_fi', 'total_cu_tl', 'inq_last_12m', 'revol_bal_joint', 'sec_app_earliest_cr_line', 'sec_app_inq_last_6mths', 'sec_app_mort_acc', 'sec_app_open_acc', 'sec_app_revol_util', 'sec_app_open_act_il', 'sec_app_num_rev_accts', 'sec_app_chargeoff_within_12_mths', 'sec_app_collections_12_mths_ex_med', 'sec_app_mths_since_last_major_derog', 'deferral_term', 'hardship_amount', 'hardship_length', 'hardship_dpd', 'orig_projected_additional_accrued_interest', 'hardship_payoff_balance_amount', 'hardship_last_payment_amount', 'settlement_amount', 'settlement_percentage', 'settlement_term', 'delinq_2yrs', 'recoveries', 'collection_recovery_fee', 'policy_code', 'acc_now_delinq', 'delinq_amnt', 'num_tl_120dpd_2m', 'num_tl_30dpd', 'num_tl_90g_dpd_24m'], axis=1, inplace=True)
+#dg=df.drop(['collections_12_mths_ex_med', 'total_rec_late_fee','funded_amnt_inv', 'installment', 'out_prncp', 'out_prncp_inv', 'total_pymnt', 'total_pymnt_inv', 'total_rec_prncp', 'total_rec_int', 'num_actv_rev_tl', 'num_bc_sats', 'num_bc_tl', 'num_il_tl', 'num_op_rev_tl', 'num_rev_accts', 'num_rev_tl_bal_gt_0', 'funded_amnt', 'mths_since_last_delinq', 'mths_since_recent_bc', 'mths_since_recent_bc_dlq', 'mths_since_recent_inq', 'num_sats', 'total_acc', 'tax_liens', 'pub_rec_bankruptcies', 'total_il_high_credit_limit', 'percent_bc_gt_75', 'bc_open_to_buy', 'total_bc_limit', 'tot_hi_cred_lim', 'avg_cur_bal'], axis=1, inplace=True)
+
+df.info()
+
+
+### Observamos la regresión logistica
+
+#Creamos la variable independiente
+
+dh=df.fillna(int(0))
+dh
+dh.info()
+
+dhh=dh[['pct_tl_nvr_dlq', 'total_rev_hi_lim', 'mths_since_last_record', 'mo_sin_rcnt_tl', 'tax_liens', 'mths_since_recent_revol_delinq', 'pub_rec', 'num_actv_bc_tl', 'total_rev_hi_lim', 'tot_cur_bal', 'annual_inc', 'acc_open_past_24mths', 'funded_amnt' , 'revol_bal', 'total_bc_limit', 'num_il_tl', 'mort_acc', 'target']]
+
+
+X_train, X_test, y_train, y_test = train_test_split( dhh.iloc[:, 1:15], dh.target, test_size = .7, random_state=25)
+
+X_train.info()
+
+regressorOLS = sm.OLS(y_train, X_train).fit()
+regressorOLS.summary()
+
+#Variables no significativas
+
+di=dh[['num_actv_bc_tl', 'total_rev_hi_lim', 'tot_cur_bal', 'annual_inc', 'acc_open_past_24mths' , 'target']]
+
+di.info()
+#di.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/di.csv')
+
+#dj=di[(di.target == 1)]
+#dj2=di[(di.target == 0)]
+
+#dj3 = np.array(dj2)
+
+
+#dj4=dj3[np.random.choice(dj3.shape[0], 187, replace=False)]
+
+#dj5 = pd.DataFrame(dj4, columns=['num_actv_bc_tl', 'total_rev_hi_lim', 'tot_cur_bal', 'annual_inc', 'acc_open_past_24mths' , 'target'])
+
+#dj5
+
+#dj6=pd.concat([dj,dj5])
+#dj6
+
+#X_train, X_test, y_train, y_test = train_test_split( dj6.iloc[:, 0:5], dj6.target, test_size = .7, random_state=25)
+
+
+#regressorOLS = sm.OLS(y_train, X_train).fit()
+#regressorOLS.summary()
+
+# Regresión para reestimación
+LogReg = LogisticRegression()
+LogReg.fit(X_train, y_train)
+
+#x_pred = LogReg.predict(X_train)
+
+#x_prob = LogReg.predict_proba(X_train) 
+
+#intercept=LogReg.intercept_
+#intercept
+#coef=LogReg.coef_
+#coef
+
+
+
+predicted = LogReg.predict(X_test1)
+
+probs = LogReg.predict_proba(X_test1)
+
+#probs = pd.DataFrame(probs)
+
+
+#probs.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/20182/X_test1.csv')
+#x1.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/x1.csv')
+
+metrics.accuracy_score(y_test1, predicted)
+metrics.roc_auc_score(y_test1, probs[:, 1])
+
+metrics.confusion_matrix(y_test1, predicted)
+metrics.classification_report(y_test1, predicted)
+
+
+print(x_pred)
+
+
+y_pred = LogReg.predict(X_test)
+
+score_train=LogReg.score(X_train, y_train)
+
+
+print ("Fit a model X_train, and calculate MSE with Y_train:", np.mean((y_train - LogReg.predict(X_train)) ** 2))
+print ("Fit a model X_train, and calculate MSE with X_test, Y_test:", np.mean((y_test - LogReg.predict(X_test)) ** 2))
+
+
+X_train, X_test, y_train, y_test = train_test_split( di.iloc[:, 0:5], di.target, test_size = .1, random_state=25)
+
+model_2=LogReg.fit(X_train,y_train)
+
+#print (com1)
+### ROC Train
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_curve
+logit_roc_auc = roc_auc_score(y_train, LogReg.predict(X_train))
+
+fpr, tpr, thresholds = roc_curve(y_train, LogReg.predict_proba(X_train)[:,1])
+
+plt.figure()
+plt.subplot(121)
+plt.plot(fpr, tpr, label='Logistic Regression (area = %0.2f)' % logit_roc_auc)
+plt.show()
+
+### ROC Test
+from sklearn.metrics import roc_auc_score
+from sklearn.metrics import roc_curve
+logit_roc_auc1 = roc_auc_score(y_test, LogReg.predict(X_test))
+
+fpr1, tpr1, thresholds1 = roc_curve(y_test, LogReg.predict_proba(X_test)[:,1])
+
+plt.figure()
+plt.subplot(121)
+plt.plot(fpr, tpr, label='Logistic Regression Real' )
+plt.plot(fpr1, tpr1, label='Logistic Regression Test')
+plt.show()
+
+
+intercept=model_2.intercept_
+intercept
+coef=model_2.coef_
+coef
+
+
+probs = model_2.predict_proba(X_test)
+
+regressorOLS = sm.OLS(y_train, X_train).fit()
+regressorOLS.summary()
+
+
+pd.set_option('display.width', 150)
+header = ['pd_0', 'pd_1' ]
+header
+pd_1 = np.array(probs)
+pd_1
+
+pd_2 = pd.DataFrame(pd_1, columns=['pd_0', 'pd_1' ])
+pd_2['New_ID']= pd_2.index
+pd_2
+
+target = pd.DataFrame(y_train, columns=['target'])
+target
+target.insert(0, 'New_ID', range(len(target)))
+target['ID']= target.index
+
+
+
+compara=target.merge(pd_2, left_on='New_ID', right_on='New_ID', how='inner')
+
+
+sns.kdeplot(compara.pd_1,label="Probabilidad 1")
+plt.show()
+
+X_train.info()
+
+
+### Nos quedamos con las variables de interes 
+x1=di[['num_actv_bc_tl', 'total_rev_hi_lim', 'tot_cur_bal', 'annual_inc', 'acc_open_past_24mths']]
+x1
+
+#x1.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/x1.csv')
+
+
+####### Analisis visual annual_inc
+
+##histograma
+x1.annual_inc.hist()
+
+
+##Descriptivo
+x1.annual_inc.describe() 
+
+
+## Pruebas de normalidad
+stats.mstats.normaltest(x1.annual_inc)
+
+
+####### Analisis visual num_actv_bc_tl
+
+##histograma
+x1.num_actv_bc_tl.hist()
+
+
+##Descriptivo
+x1.num_actv_bc_tl.describe() 
+
+
+## Pruebas de normalidad
+stats.mstats.normaltest(x1.num_actv_bc_tl)
+
+
+####### Analisis visual total_rev_hi_lim
+
+##histograma
+x1.total_rev_hi_lim.hist()
+
+
+##Descriptivo
+x1.total_rev_hi_lim.describe() 
+
+
+## Pruebas de normalidad
+stats.mstats.normaltest(x1.total_rev_hi_lim)
+
+
+####### Analisis visual tot_cur_bal
+
+##histograma
+x1.tot_cur_bal.hist()
+
+
+##Descriptivo
+x1.tot_cur_bal.describe() 
+
+
+## Pruebas de normalidad
+stats.mstats.normaltest(x1.tot_cur_bal)
+
+
+####### Analisis visual acc_open_past_24mths
+
+##histograma
+x1.acc_open_past_24mths.hist()
+
+
+##Descriptivo
+x1.acc_open_past_24mths.describe() 
+
+
+## Pruebas de normalidad
+stats.mstats.normaltest(x1.acc_open_past_24mths)
+
+## Matriz de dispersión con grafico de linea 
+
+##Con diagonal de lineas
+scatter_matrix(x1, alpha=0.2, figsize=(6, 6), diagonal='kde')
+scatter_matrix(x1, alpha=0.2, figsize=(6, 6), diagonal='hist')
+
+##Con diagonal de histograma
+#scatter_matrix(x1, alpha=0.2, figsize=(6, 6), diagonal='hist')
+## Box Wiskas
+
+color = dict(boxes='DarkGreen', whiskers='DarkOrange', medians='DarkBlue', caps='Gray')
+
+x1.plot.box(color=color, sym='r+')
+
+plt.figure()
+x1.plot.hist(alpha=0.5)
+
+
+################################################
+########     TRANSFORMACION DE VARIABLES #######
+################################################
+
+####### Imputación de missing
+
+snull=x1.fillna(int(0))
+snull
+
+#snull.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/snull.csv')
+
+####### Ajuste de valor 0 para logaritmos
+
+scero = snull.replace([0], .01)
+scero
+#scero.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/scero.csv')
+
+####### Logaritmo Natural 
+
+logbase1=np.log(scero)
+logbase= logbase1.clip(0)
+#logbase.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/logbase.csv')
+
+logbase.describe()
+
+scatter_matrix(logbase, alpha=0.2, figsize=(6, 6), diagonal='kde')
+
+
+
+
+medias=logbase.mean()
+medias
+medias1=np.array(medias).astype(np.float)
+medias1
+
+desv=logbase.std()
+desv
+desv1=np.array(desv).astype(np.float)
+desv1
+
+####### Estandarizaición 
+
+logbase_valor=logbase.values
+Normaliz = scale(logbase_valor)
+Normaliz
+
+
+pd.set_option('display.width', 150)
+header = ['num_actv_bc_tl', 'total_rev_hi_lim', 'tot_cur_bal', 'annual_inc', 'acc_open_past_24mths']
+header
+Normaliz_1 = np.array(Normaliz)
+Normaliz_1
+
+Normaliz_2 = pd.DataFrame(Normaliz_1, columns=['num_actv_bc_tl', 'total_rev_hi_lim', 'tot_cur_bal', 'annual_inc', 'acc_open_past_24mths'])
+
+Normaliz_2
+
+
+scatter_matrix(Normaliz_2, alpha=0.2, figsize=(6, 6), diagonal='kde')
+
+#Normaliz_2.to_csv('C:/Users/bodyr/Dropbox/Bebitos/Thesis/Bases/Normaliz_2.csv')
+
+stats.mstats.normaltest(Normaliz_2)
+
+
+com_x=Normaliz_2.describe()
+com_x
+
+################################################
+########     COMPONENTES PRINCIPALES     #######
+################################################
+
+####### Calculo de la tecnica 
+
+pca = PCA(n_components=5)
+####### Ajuste del modelo 
+pca1=pca.fit(Normaliz)
+
+####### Ajuste del modelo 
+
+#The amount of variance that each PC explains
+var= pca.explained_variance_ratio_
+print(var)
+####### Ajuste del modelo 
+
+#Cumulative Variance explains
+var1=np.cumsum(np.round(pca.explained_variance_ratio_, decimals=4)*100)
+print (var1)
+plt.plot(var1)
+
+
+####### ************************** Nombrar cada uno de los componenstes
+
+####### Calculo de los estadisticos
+
+value=pca.fit_transform(Normaliz)
+value
+
+matrix=pca.get_covariance()
+matrix
+
+parametros=pca.get_params(deep=True)
+parametros
+
+inversa=pca.get_precision()
+inversa
+
+Eigenvectors=pca.components_
+Eigenvectors
+
+eigenvalue=pca.explained_variance_
+eigenvalue
+
+singular_values=pca.singular_values_
+singular_values
+
+################################################
+########     GENERACIÓN DE ESPACIO       #######
+################################################
+
+####### Calculos para la generaicón del espacio a partir de la base real
+
+pd.set_option('display.width', 150)
+header = ['CP1','CP2','CP3','CP4','CP5' ]
+header
+datos1 = np.array(value)
+datos1
+
+Normaliz_3 = pd.DataFrame(datos1, columns=['CP1','CP2','CP3','CP4','CP5' ])
+Normaliz_3.describe()
+
+scatter_matrix(Normaliz_3, alpha=0.2, figsize=(6, 6), diagonal='kde')
+
+
+CP = {}
+for l in range(1,6):
+    globals()['CP%s' % l] =Normaliz_3[['CP%s' % l]]
+
+#CP=datos[['CPl']]
+####### Calculo de posición
+
+    globals()['medias_cp%s' % l] =eval('CP%s' % l).mean()
+####### Calculo de dispersión    
+    globals()['desv_cp%s' % l] =eval('CP%s' % l).std()
+
+#medias_sim = pd.DataFrame(medias_cp)
+#medias_sim
+
+####### Calculo de las simulación    
+    globals()['s%s' % l]=np.random.normal(eval('medias_cp%s' % l),eval('desv_cp%s' % l),10000)
+    #globals()['s%s' % l]=np.random.normal(0,1,10000)
+    globals()['t%s' % l]=np.array(globals()['s%s' % l]).astype(np.float)
+    globals()['tt%s' % l] = pd.DataFrame(eval('t%s' % l), columns=['CP%s' % l])
+
+
+datosSCP=pd.concat([tt1, tt2, tt3, tt4, tt5],axis=1)
+datosSCP
+
+scatter_matrix(datosSCP, alpha=0.5, figsize=(8, 8), diagonal='kde')
+
+stats.mstats.normaltest(datosSCP)
+
+
+datosSCP.describe()
+
+####### Creación del espacio
+
+reg_Normal=np.matmul(datosSCP,Eigenvectors)
+
+####### Renombre de las variables
+
+reg_Normal = pd.DataFrame(reg_Normal, columns=['num_actv_bc_tl', 'total_rev_hi_lim', 'tot_cur_bal', 'annual_inc', 'acc_open_past_24mths'])
+reg_Normal
+
+stats.mstats.normaltest(reg_Normal)
+
+
+scatter_matrix(reg_Normal, alpha=0.5, figsize=(8, 8), diagonal='kde')
+scatter_matrix(Normaliz_2, alpha=0.5, figsize=(8, 8), diagonal='kde')
+
+
+reg_Normal.describe()
+Normaliz_2.describe()
+
+####### Posicionamiento y dispersión, desestandarización
+
+reg_Normal_std=reg_Normal*desv1
+reg_Normal_std
+reg_desNormal = reg_Normal_std+medias1
+reg_desNormal
+
+reg_desNormal.describe()
+
+scatter_matrix(reg_desNormal, alpha=0.5, figsize=(8, 8), diagonal='kde')
+
+logbase.describe()
+
+scatter_matrix(logbase, alpha=0.5, figsize=(8, 8), diagonal='hist')
+
+
+####### Escalamiento
+
+reg_desLogNormal= np.exp(reg_desNormal)
+reg_desLogNormal.describe()
+
+scero.describe()
+
+
+
+
+
+################################################
+###########     CONTRASTE DE PRUEBA      #######
+################################################
+
+
+
+####### Analisis descriptivo 
+scatter_matrix(reg_desLogNormal, alpha=0.5, figsize=(8, 8), diagonal='kde')
+
+scatter_matrix(scero, alpha=0.5, figsize=(8, 8), diagonal='kde')
+
+reg_desLogNormal
+
+#Maximos
+reg_desLogNormal1 = reg_desLogNormal[(reg_desLogNormal.num_actv_bc_tl <= 19)]
+reg_desLogNormal1 = reg_desLogNormal1[(reg_desLogNormal.tot_cur_bal <= 1800000)]
+reg_desLogNormal1 = reg_desLogNormal1[(reg_desLogNormal1.acc_open_past_24mths <= 24)]
+
+#Minimos
+
+reg_desLogNormal1.describe()
+
+
+x1.describe()
+
+
+reg_desLogNormal1.info()
+
+####### Graficas bivariadas 
+
+
+sta, critucal, Sl =stats.anderson_ksamp([reg_desLogNormal1['num_actv_bc_tl'],x1['num_actv_bc_tl']])
+
+st, pvalue=ks_2samp(reg_desLogNormal1['num_actv_bc_tl'], x1['num_actv_bc_tl'])
+
+sns.kdeplot(reg_desLogNormal1['num_actv_bc_tl'],label="Estimate")
+sns.kdeplot(x1['num_actv_bc_tl'],label="Real")
+#plt.figtext(.5, .65, "Anderson = ")
+#plt.figtext(.5, .6, format(round (Sl,4) ))
+plt.figtext(.75, .65, "K-S =")
+plt.figtext(.75, .6, format(round (pvalue,4) ))
+plt.legend();
+
+
+sta, critucal, Sl =stats.anderson_ksamp([reg_desLogNormal1['total_rev_hi_lim'],x1['total_rev_hi_lim']])
+
+st, pvalue=ks_2samp(reg_desLogNormal1['total_rev_hi_lim'], x1['total_rev_hi_lim'])
+
+sns.kdeplot(reg_desLogNormal1['total_rev_hi_lim'],label="Estimate")
+sns.kdeplot(x1['total_rev_hi_lim'],label="Real")
+#plt.figtext(.7, .65, "Anderson = ")
+#plt.figtext(.75, .6, format(round (Sl,4) ))
+#plt.figtext(.7, .55, "K-S =")
+#plt.figtext(.75, .5, format(round (pvalue,4) ))
+plt.legend();
+
+
+sta, critucal, Sl =stats.anderson_ksamp([reg_desLogNormal1['tot_cur_bal'],x1['tot_cur_bal']])
+
+st, pvalue=ks_2samp(reg_desLogNormal1['tot_cur_bal'], x1['tot_cur_bal'])
+
+sns.kdeplot(reg_desLogNormal1['tot_cur_bal'],label="Estimate")
+sns.kdeplot(x1['tot_cur_bal'],label="Real")
+plt.figtext(.7, .65, "Anderson = ")
+plt.figtext(.75, .6, format(round (Sl,4) ))
+plt.figtext(.7, .55, "K-S =")
+plt.figtext(.75, .5, format(round (pvalue,4) ))
+plt.legend();
+
+sta, critucal, Sl =stats.anderson_ksamp([reg_desLogNormal1['annual_inc'],x1['annual_inc']])
+
+st, pvalue=ks_2samp(reg_desLogNormal1['annual_inc'], x1['annual_inc'])
+
+sns.kdeplot(reg_desLogNormal1['annual_inc'],label="Estimate")
+sns.kdeplot(x1['annual_inc'],label="Real")
+plt.figtext(.7, .65, "Anderson = ")
+plt.figtext(.75, .6, format(round (Sl,4) ))
+plt.figtext(.7, .55, "K-S =")
+plt.figtext(.75, .5, format(round (pvalue,4) ))
+plt.legend();
+
+sta, critucal, Sl =stats.anderson_ksamp([reg_desLogNormal1['acc_open_past_24mths'],x1['acc_open_past_24mths']])
+
+st, pvalue=ks_2samp(reg_desLogNormal1['acc_open_past_24mths'], x1['acc_open_past_24mths'])
+
+sns.kdeplot(reg_desLogNormal1['acc_open_past_24mths'],label="Estimate")
+sns.kdeplot(x1['acc_open_past_24mths'],label="Real")
+plt.figtext(.7, .65, "Anderson = ")
+plt.figtext(.75, .6, format(round (Sl,4) ))
+plt.figtext(.7, .55, "K-S =")
+plt.figtext(.75, .5, format(round (pvalue,4) ))
+plt.legend();
+
+
+####### Evaluación en la prueba predictiva
+
+
+se_prob = model_2.predict_proba(reg_desLogNormal1) 
+
+
+pd.set_option('display.width', 150)
+header = ['pd_0', 'pd_1' ]
+header
+pd_1_se = np.array(se_prob)
+pd_1_se
+
+pd_2_se = pd.DataFrame(pd_1_se, columns=['pd_0', 'pd_1' ])
+pd_2_se
+
+
+sns.kdeplot(pd_2_se.pd_1,label="Probabilidad Simulación")
+sns.kdeplot(pd_2.pd_1,label="Probabilidad Test Real")
+plt.show()
+
+
+
+####### Simulación estresada
+CP = {}
+for l in range(1,6):
+
+    globals()['s%s' % l]=np.random.normal(eval('medias_cp%s' % l),eval('desv_cp%s' % l),10000)
+    s5=np.random.normal(1,1,10000)
+    globals()['t%s' % l]=np.array(globals()['s%s' % l]).astype(np.float)
+    globals()['tt%s' % l] = pd.DataFrame(eval('t%s' % l), columns=['CP%s' % l])
+
+
+datosSCP1=pd.concat([tt1, tt2, tt3, tt4, tt5],axis=1)
+
+####### Creación del espacio
+
+reg_Normal1=np.matmul(datosSCP1,Eigenvectors)
+
+####### Renombre de las variables
+
+reg_Normal1 = pd.DataFrame(reg_Normal1, columns=['num_actv_bc_tl', 'total_rev_hi_lim', 'tot_cur_bal', 'annual_inc', 'acc_open_past_24mths'])
+
+
+reg_Normal_std1=reg_Normal1*desv1
+reg_Normal_std1
+reg_desNormal2 = reg_Normal_std1+medias1
+reg_desNormal2
+
+reg_desLogNormal2= np.exp(reg_desNormal2)
+
+reg_desLogNormal2.mean()
+reg_desLogNormal1.mean()
+
+sns.kdeplot(reg_desLogNormal2['num_actv_bc_tl'],label="Estimate")
+sns.kdeplot(reg_desLogNormal1['num_actv_bc_tl'],label="Estimate Estres")
+plt.legend();
+
+reg_desLogNormal2.mean()
+
+
+
+reg_desLogNormal1.mean()
+
+
+sf_prob = model_2.predict_proba(reg_desLogNormal2)   
+
+
+pd.set_option('display.width', 150)
+header = ['pd_0', 'pd_1' ]
+header
+pd_1_sf = np.array(sf_prob)
+pd_1_sf
+
+pd_2_sf = pd.DataFrame(pd_1_sf, columns=['pd_0', 'pd_1' ])
+pd_2_sf
+
+
+sns.kdeplot(pd_2_sf.pd_1,label="Probabilidad Estres")
+sns.kdeplot(pd_2_se.pd_1,label="Probabilidad Simulada")
+sns.kdeplot(pd_2.pd_1,label="Probabilidad Test Real")
+plt.show()
+
